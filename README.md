@@ -1,6 +1,6 @@
-# -SYN-Stress-Flood-Tester-Termux-Linux-
 
-𝗗𝗢𝗦 𝗦𝗖𝗥𝗜𝗣𝗧 ( 𝗗𝗘𝗡𝗜𝗔𝗟 𝗢𝗙 𝗦𝗘𝗥𝗩𝗜𝗖𝗘 ) 
+
+# 𝗗𝗢𝗦 𝗦𝗖𝗥𝗜𝗣𝗧 ( 𝗗𝗘𝗡𝗜𝗔𝗟 𝗢𝗙 𝗦𝗘𝗥𝗩𝗜𝗖𝗘 ) 
 
 A lightweight, high-performance raw socket SYN flood tool written in Python. It is designed for network engineers and security researchers to test the resilience of their own infrastructure against transport-layer resource exhaustion. By crafting raw IP and TCP headers with spoofed source addresses, it rapidly fills a target's connection table with half-open connections (SYN_RECV state), allowing operators to verify if their SYN-cookie defenses, load balancers, and firewall rate-limiting are functioning correctly under load.
 
